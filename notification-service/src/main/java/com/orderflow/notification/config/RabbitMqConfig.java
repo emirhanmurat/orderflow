@@ -25,6 +25,7 @@ public class RabbitMqConfig {
     public Binding orderProcessedBinding(Queue orderProcessedQueue, TopicExchange orderExchange) {
         return BindingBuilder.bind(orderProcessedQueue).to(orderExchange).with("order.processed");
     }
+    
       @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
