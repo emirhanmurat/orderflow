@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order-worker
-          image: codsubayi/order-worker:1.0.0
+          image: codsubayi/order-worker:2764a30
           imagePullPolicy: Always
           ports:
             - containerPort: 8081
