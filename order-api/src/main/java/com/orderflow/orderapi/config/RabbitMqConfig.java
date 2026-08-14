@@ -26,7 +26,6 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(orderCreatedQueue).to(orderExchange).with("order.created");
     }
 
-
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
