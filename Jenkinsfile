@@ -6,29 +6,55 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
         stage('Detect Changes') {
             steps {
                 script {
-                    env.API_CHANGED = sh(
-                        script: "git diff --name-only HEAD~1 HEAD | grep -q '^order-api/'",
-                        returnStatus: true
-                    ) == 0 ? 'true' : 'false'
 
-                    env.WORKER_CHANGED = sh(
-                        script: "git diff --name-only HEAD~1 HEAD | grep -q '^order-worker/'",
-                        returnStatus: true
-                    ) == 0 ? 'true' : 'false'
+                    def currentCommit = sh(
+                        script: 'git rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
 
-                    env.NOTIFICATION_CHANGED = sh(
-                        script: "git diff --name-only HEAD~1 HEAD | grep -q '^notification-service/'",
-                        returnStatus: true
-                    ) == 0 ? 'true' : 'false'
+                    def previousCommit = env.GIT_PREVIOUS_SUCCESSFUL_COMMIT
+
+                    if (!previousCommit) {
+                        echo "No previous successful build found."
+                        echo "All services will be treated as changed."
+
+                        env.API_CHANGED = 'true'
+                        env.WORKER_CHANGED = 'true'
+                        env.NOTIFICATION_CHANGED = 'true'
+
+                    } else {
+
+                        echo "Previous successful commit: ${previousCommit}"
+                        echo "Current commit: ${currentCommit}"
+
+                        def changedFiles = sh(
+                            script: "git diff --name-only ${previousCommit} ${currentCommit}",
+                            returnStdout: true
+                        ).trim()
+
+                        echo "Changed files:"
+                        echo changedFiles
+
+                        env.API_CHANGED = changedFiles.readLines().any {
+                            it.startsWith('order-api/')
+                        } ? 'true' : 'false'
+
+                        env.WORKER_CHANGED = changedFiles.readLines().any {
+                            it.startsWith('order-worker/')
+                        } ? 'true' : 'false'
+
+                        env.NOTIFICATION_CHANGED = changedFiles.readLines().any {
+                            it.startsWith('notification-service/')
+                        } ? 'true' : 'false'
+                    }
+
+                    echo "API_CHANGED=${env.API_CHANGED}"
+                    echo "WORKER_CHANGED=${env.WORKER_CHANGED}"
+                    echo "NOTIFICATION_CHANGED=${env.NOTIFICATION_CHANGED}"
                 }
             }
         }
@@ -45,8 +71,8 @@ pipeline {
                     sh '''
                         echo "$DOCKER_PASSWORD" |
                         docker login \
-                          -u "$DOCKER_USERNAME" \
-                          --password-stdin
+                            -u "$DOCKER_USERNAME" \
+                            --password-stdin
                     '''
                 }
             }
@@ -67,11 +93,11 @@ pipeline {
                 ]) {
                     sh '''
                         docker build \
-                          -t "$DOCKER_USERNAME/order-api:$IMAGE_TAG" \
-                          ./order-api
+                            -t "$DOCKER_USERNAME/order-api:$IMAGE_TAG" \
+                            ./order-api
 
                         docker push \
-                          "$DOCKER_USERNAME/order-api:$IMAGE_TAG"
+                            "$DOCKER_USERNAME/order-api:$IMAGE_TAG"
                     '''
                 }
             }
@@ -92,11 +118,11 @@ pipeline {
                 ]) {
                     sh '''
                         docker build \
-                          -t "$DOCKER_USERNAME/order-worker:$IMAGE_TAG" \
-                          ./order-worker
+                            -t "$DOCKER_USERNAME/order-worker:$IMAGE_TAG" \
+                            ./order-worker
 
                         docker push \
-                          "$DOCKER_USERNAME/order-worker:$IMAGE_TAG"
+                            "$DOCKER_USERNAME/order-worker:$IMAGE_TAG"
                     '''
                 }
             }
@@ -117,53 +143,65 @@ pipeline {
                 ]) {
                     sh '''
                         docker build \
-                          -t "$DOCKER_USERNAME/notification-service:$IMAGE_TAG" \
-                          ./notification-service
+                            -t "$DOCKER_USERNAME/notification-service:$IMAGE_TAG" \
+                            ./notification-service
 
                         docker push \
-                          "$DOCKER_USERNAME/notification-service:$IMAGE_TAG"
+                            "$DOCKER_USERNAME/notification-service:$IMAGE_TAG"
                     '''
                 }
             }
         }
+
         stage('Update Kubernetes Manifests') {
             steps {
                 withCredentials([
-                usernamePassword(
-                credentialsId: 'dockerhub-creds',
-                usernameVariable: 'DOCKER_USERNAME',
-                passwordVariable: 'DOCKER_PASSWORD'
-            ),
-                usernamePassword(
-                credentialsId: '66c5ef41-2b3c-4fd2-a4d5-5cd3ddb716f3',
-                usernameVariable: 'GIT_USERNAME',
-                passwordVariable: 'GIT_PASSWORD'
-            )
-        ]) {
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    ),
+                    usernamePassword(
+                        credentialsId: '66c5ef41-2b3c-4fd2-a4d5-5cd3ddb716f3',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )
+                ]) {
                     sh '''
-                git config user.name "jenkins"
-                git config user.email "jenkins@localhost"
+                        git config user.name "jenkins"
+                        git config user.email "jenkins@localhost"
 
-                if [ "$API_CHANGED" = "true" ]; then
-                    sed -i "s|image: .*order-api:.*|image: $DOCKER_USERNAME/order-api:$IMAGE_TAG|" k8s/order-api.yaml
-                fi
+                        if [ "$API_CHANGED" = "true" ]; then
+                            sed -i \
+                                "s|image: .*order-api:.*|image: $DOCKER_USERNAME/order-api:$IMAGE_TAG|" \
+                                k8s/order-api.yaml
+                        fi
 
-                if [ "$WORKER_CHANGED" = "true" ]; then
-                    sed -i "s|image: .*order-worker:.*|image: $DOCKER_USERNAME/order-worker:$IMAGE_TAG|" k8s/order-worker.yaml
-                fi
+                        if [ "$WORKER_CHANGED" = "true" ]; then
+                            sed -i \
+                                "s|image: .*order-worker:.*|image: $DOCKER_USERNAME/order-worker:$IMAGE_TAG|" \
+                                k8s/order-worker.yaml
+                        fi
 
-                if [ "$NOTIFICATION_CHANGED" = "true" ]; then
-                    sed -i "s|image: .*notification-service:.*|image: $DOCKER_USERNAME/notification-service:$IMAGE_TAG|" k8s/notification-service.yaml
-                fi
+                        if [ "$NOTIFICATION_CHANGED" = "true" ]; then
+                            sed -i \
+                                "s|image: .*notification-service:.*|image: $DOCKER_USERNAME/notification-service:$IMAGE_TAG|" \
+                                k8s/notification-service.yaml
+                        fi
 
-                git add k8s/
+                        git add k8s/
 
-                git diff --cached --quiet || \
-                git commit -m "update images to $IMAGE_TAG"
+                        if ! git diff --cached --quiet; then
+                            git commit -m "update images to $IMAGE_TAG"
 
-                git push https://$GIT_USERNAME:$GIT_PASSWORD@github.com/$GIT_USERNAME/orderflow.git HEAD:main
-            '''
-        }
+                            git push \
+                                https://$GIT_USERNAME:$GIT_PASSWORD@github.com/$GIT_USERNAME/orderflow.git \
+                                HEAD:main
+                        else
+                            echo "No Kubernetes manifest changes."
+                        fi
+                    '''
+                }
             }
         }
     }
