@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order-api
-          image: codsubayi/order-api:1487a4b
+          image: codsubayi/order-api:738ee68
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

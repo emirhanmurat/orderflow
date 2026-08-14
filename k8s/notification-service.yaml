@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: codsubayi/notification-service:1487a4b
+          image: codsubayi/notification-service:738ee68
           imagePullPolicy: Always
           ports:
             - containerPort: 8082
