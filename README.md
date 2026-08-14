@@ -18,3 +18,37 @@ POST /orders -> PostgreSQL + Redis -> RabbitMQ(order.created)
 -> notification-service
 
 Environment variables are supported for Kubernetes deployment.
+
+# CI/CD Flow
+                        ┌──────────────┐
+                        │    GitHub    │
+                        │ source code  │
+                        └──────┬───────┘
+                               │
+                            webhook
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │    Jenkins   │
+                        └──────┬───────┘
+                               │
+                ┌──────────────┼──────────────┐
+                │              │              │
+                ▼              ▼              ▼
+             Maven           Docker        Helm values
+                │              │              │
+                ▼              ▼              │
+             Nexus         DockerHub           │
+                │              │              │
+                │              │              ▼
+                │              │           GitHub
+                │              │              │
+                │              │              ▼
+                │              │          Argo CD
+                │              │              │
+                │              │              ▼
+                │              │       Local Kubernetes
+                │              │
+                │              └── image pull
+                │
+                └── JAR/artifacts
