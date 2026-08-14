@@ -6,7 +6,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -125,6 +124,41 @@ pipeline {
                           "$DOCKER_USERNAME/notification-service:$IMAGE_TAG"
                     '''
                 }
+            }
+        }
+        stage('Update Kubernetes Manifests') {
+            steps {
+                withCredentials([
+                usernamePassword(
+                credentialsId: '66c5ef41-2b3c-4fd2-a4d5-5cd3ddb716f3',
+                usernameVariable: 'GIT_USERNAME',
+                passwordVariable: 'GIT_PASSWORD'
+            )
+        ]) {
+                    sh '''
+                git config user.name "jenkins"
+                git config user.email "jenkins@localhost"
+
+                if [ "$API_CHANGED" = "true" ]; then
+                    sed -i "s|image: .*order-api:.*|image: $DOCKER_USERNAME/order-api:$IMAGE_TAG|" k8s/order-api.yaml
+                fi
+
+                if [ "$WORKER_CHANGED" = "true" ]; then
+                    sed -i "s|image: .*order-worker:.*|image: $DOCKER_USERNAME/order-worker:$IMAGE_TAG|" k8s/order-worker.yaml
+                fi
+
+                if [ "$NOTIFICATION_CHANGED" = "true" ]; then
+                    sed -i "s|image: .*notification-service:.*|image: $DOCKER_USERNAME/notification-service:$IMAGE_TAG|" k8s/notification-service.yaml
+                fi
+
+                git add k8s/
+
+                git diff --cached --quiet || \
+                git commit -m "update images to $IMAGE_TAG"
+
+                git push https://$GIT_USERNAME:$GIT_PASSWORD@github.com/$GIT_USERNAME/orderflow.git HEAD:main
+            '''
+        }
             }
         }
     }
