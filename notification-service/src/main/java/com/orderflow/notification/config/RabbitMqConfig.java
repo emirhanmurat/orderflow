@@ -1,5 +1,6 @@
 package com.orderflow.notification.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
@@ -8,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMqConfig {
+
     public static final String EXCHANGE = "orderflow.exchange";
     public static final String QUEUE = "order.processed.queue";
 
@@ -22,13 +24,18 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    public Binding orderProcessedBinding(Queue orderProcessedQueue, TopicExchange orderExchange) {
-        return BindingBuilder.bind(orderProcessedQueue).to(orderExchange).with("order.processed");
+    public Binding orderProcessedBinding(
+            Queue orderProcessedQueue,
+            TopicExchange orderExchange) {
+
+        return BindingBuilder
+                .bind(orderProcessedQueue)
+                .to(orderExchange)
+                .with("order.processed");
     }
 
-
     @Bean
-    public MessageConverter jsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+    public MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
+        return new Jackson2JsonMessageConverter(objectMapper);
     }
 }
