@@ -17,6 +17,9 @@ POST /orders -> PostgreSQL + Redis -> RabbitMQ(order.created)
 -> order-worker -> PostgreSQL -> RabbitMQ(order.processed)
 -> notification-service
 
+Health:
+orders/health
+
 Environment variables are supported for Kubernetes deployment.
 
 # CI/CD Flow
